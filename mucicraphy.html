@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>Musicraphy Energy Field</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      margin: 0; height: 100vh; overflow: hidden;
+      font-family: -apple-system,BlinkMacSystemFont,"SF Pro Display",sans-serif;
+      background: linear-gradient(135deg,#eef2f7,#e3e7ef);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      color: #1e1e1e;
+    }
+    #breathCanvas {width: 400px; height: 400px; margin-bottom: 20px;}
+    .controls,.modes {display:flex; gap:12px; flex-wrap:wrap; justify-content:center; margin:15px 0;}
+    .glass-btn {
+      padding:10px 18px; border-radius:20px;
+      background:rgba(255,255,255,0.6); backdrop-filter:blur(15px);
+      border:1px solid rgba(0,0,0,0.05); font-size:14px; font-weight:500;
+      color:#1e1e1e; cursor:pointer; transition:all 0.4s;
+    }
+    .glass-btn:hover {background:rgba(255,255,255,0.8); transform:scale(1.05); box-shadow:0 6px 16px rgba(0,0,0,0.1);}
+    .glass-btn.active {background:linear-gradient(145deg,#007aff,#34c759); color:white;}
+    .player {text-align:center; margin:15px;}
+    .player audio {width:280px; height:40px; border-radius:12px; background:rgba(255,255,255,0.7);}
+    .info {
+      margin-top:15px; width:320px; background:rgba(255,255,255,0.6);
+      backdrop-filter:blur(20px); border-radius:16px; padding:18px;
+      box-shadow:0 6px 25px rgba(0,0,0,0.08); font-size:14px; line-height:1.6;
+    }
+    .info-item {display:flex; justify-content:space-between; margin:6px 0;}
+    .label {color:#666;} .value {font-weight:600;}
+    .chart {
+      margin-top:12px; width:320px; background:rgba(255,255,255,0.5);
+      backdrop-filter:blur(15px);
+      border-radius:16px; padding:10px; position:relative;
+      box-shadow:0 6px 20px rgba(0,0,0,0.05);
+    }
+    .chart-tabs {display:flex; justify-content:space-around; margin-bottom:6px;}
+    .tab-btn {flex:1; margin:0 4px; padding:6px 0; border-radius:12px; border:none;
+      background:rgba(255,255,255,0.5); font-size:12px; cursor:pointer; transition:all 0.3s;}
+    .tab-btn.active {background:linear-gradient(145deg,#007aff,#34c759); color:white; font-weight:600;}
+    #chartCanvas {width:100%; height:100%;}
+    .chart-value {
+      position:absolute; top:12px; right:16px; padding:4px 10px;
+      border-radius:12px; font-size:12px; font-weight:600;
+      background:rgba(255,255,255,0.7); backdrop-filter:blur(8px);
+    }
+    .chart-slider {width:100%; margin-top:6px;}
+    .copyright {position:absolute; bottom:10px; font-size:12px; color:rgba(0,0,0,0.4);}
+    #adminPanel {
+      display:none; position:fixed; top:0; left:0; width:100%; height:100%;
+      background:rgba(0,0,0,0.4); backdrop-filter:blur(6px);
+      justify-content:center; align-items:center;
+    }
+    #adminPanel .panel {
+      background:white; padding:20px; border-radius:12px;
+      width:360px; max-height:80%; overflow:auto;
+    }
+    #adminPanel h3 {margin-top:0;}
+    #adminPanel ul {padding-left:20px;}
+    #adminPanel li {margin:4px 0; font-size:13px;}
+    #adminPanel input {width:70%; padding:4px;}
+    #adminPanel button {margin-left:4px;}
+    /* 红光覆盖层 */
+    #redOverlay {
+      display:none;position:fixed;top:0;left:0;width:100%;height:100%;
+      background:rgba(255,0,0,0.15);pointer-events:none;
+    }
+    /* γ波屏幕闪烁层 */
+    #flashOverlay {
+      display:none;position:fixed;top:0;left:0;width:100%;height:100%;
+      background:white;opacity:0;pointer-events:none;
+    }
+  </style>
+</head>
+<body>
+  <!-- 呼吸圈 -->
+  <canvas id="breathCanvas" width="400" height="400"></canvas>
+
+  <!-- 光疗按钮 -->
+  <div class="controls">
+    <button class="glass-btn" id="gammaToggle">γ 波闪点</button>
+    <button class="glass-btn" id="blueLightToggle">防蓝光</button>
+    <button class="glass-btn" id="nirToggle">755nm 红光</button>
+  </div>
+
+  <!-- 模式按钮（分类） -->
+  <div class="modes">
+    <button class="glass-btn" data-mode="theta">θ波睡眠</button>
+    <button class="glass-btn" data-mode="alpha">α波专注</button>
+    <button class="glass-btn" data-mode="gamma">γ波防阿尔兹海默</button>
+    <button class="glass-btn" data-mode="pain">减缓疼痛</button>
+  </div>
+
+  <!-- 播放器 -->
+  <div class="player">
+    <input type="file" id="fileInput" accept="audio/*" multiple>
+    <audio id="audioPlayer" controls></audio>
+  </div>
+
+  <!-- 信息面板 -->
+  <div class="info" id="info">
+    <div class="info-item"><span class="label">🎶 当前曲目</span><span class="value">未选择</span></div>
+    <div class="info-item"><span class="label">🌀 当前模式</span><span class="value" id="modeValue">--</span></div>
+    <div class="info-item"><span class="label">❤️ 心率</span><span class="value">72 BPM</span></div>
+    <div class="info-item"><span class="label">💧 血氧</span><span class="value">97%</span></div>
+    <div class="info-item"><span class="label">🎵 音乐 BPM</span><span class="value">60</span></div>
+    <div class="info-item"><span class="label">🧠 脑波匹配度</span><span class="value">--</span></div>
+  </div>
+
+  <!-- 动态曲线小面板 -->
+  <div class="chart">
+    <div class="chart-tabs">
+      <button class="tab-btn active" data-type="hr">心率</button>
+      <button class="tab-btn" data-type="brain">脑波</button>
+      <button class="tab-btn" data-type="spo2">血氧</button>
+      <button class="tab-btn" data-type="bpm">音乐BPM</button>
+    </div>
+    <canvas id="chartCanvas" width="320" height="100"></canvas>
+    <div class="chart-value" id="chartValue">--</div>
+    <input type="range" min="0" max="60" value="0" class="chart-slider" id="chartSlider">
+  </div>
+
+  <!-- 管理员入口按钮 -->
+  <div class="controls">
+    <button class="glass-btn" id="adminBtn">🎛 曲库管理</button>
+  </div>
+
+  <!-- 管理员面板 -->
+  <div id="adminPanel">
+    <div class="panel">
+      <h3>🎵 曲库管理</h3>
+      <div id="adminContent"></div>
+      <button onclick="closeAdmin()">关闭</button>
+    </div>
+  </div>
+
+  <!-- 红光覆盖层 -->
+  <div id="redOverlay"></div>
+  <!-- γ波屏幕闪烁层 -->
+  <div id="flashOverlay"></div>
+
+  <div class="copyright">© 2025 Musicraphy | Energy Field Biofeedback</div>
+
+  <script>
+    // === 呼吸圈 & 频谱 ===
+    const canvas=document.getElementById("breathCanvas");
+    const ctx=canvas.getContext("2d");
+    let startTime=Date.now(), inhale=true;
+    setInterval(()=>{ inhale=!inhale; },4000);
+
+    const audioPlayer=document.getElementById("audioPlayer");
+    let audioContext,analyser,dataArray,bufferLength,isAudioVis=false;
+    function initAudio(){
+      audioContext=new (window.AudioContext||window.webkitAudioContext)();
+      analyser=audioContext.createAnalyser();
+      analyser.fftSize=128;
+      bufferLength=analyser.frequencyBinCount;
+      dataArray=new Uint8Array(bufferLength);
+      const source=audioContext.createMediaElementSource(audioPlayer);
+      source.connect(analyser);
+      analyser.connect(audioContext.destination);
+      isAudioVis=true;
+    }
+    audioPlayer.onplay=()=>{ if(!isAudioVis) initAudio(); };
+
+    // 文件播放
+    const fileInput=document.getElementById("fileInput");
+    let playlist=[],currentIndex=0;
+    fileInput.addEventListener("change",()=>{
+      playlist=Array.from(fileInput.files);
+      if(playlist.length>0){ currentIndex=0; playFile(playlist[currentIndex]); }
+    });
+    function playFile(file){
+      audioPlayer.src=URL.createObjectURL(file);
+      audioPlayer.play();
+      infoValues[0].textContent=file.name;
+    }
+
+    // === 绘制动画 ===
+    let gammaActive=false;
+    const flashOverlay=document.getElementById("flashOverlay");
+    function draw(){
+      ctx.clearRect(0,0,400,400);
+      const now=(Date.now()-startTime)/1000;
+      const phase=(now%8)/8;
+      const cx=200,cy=200;
+      const innerRadius=90, outerRadius=130, energyRadius=160;
+
+      // 内层呼吸进度环
+      const progress=phase*2*Math.PI;
+      ctx.beginPath();
+      ctx.arc(cx,cy,innerRadius,-Math.PI/2,progress-Math.PI/2);
+      ctx.strokeStyle= inhale?"#007aff":"#34c759";
+      ctx.lineWidth=10; ctx.lineCap="round"; ctx.stroke();
+
+      // 中层频谱环
+      if(isAudioVis){
+        analyser.getByteFrequencyData(dataArray);
+        const bars=bufferLength;
+        for(let i=0;i<bars;i++){
+          const angle=(i/bars)*2*Math.PI;
+          const amp=dataArray[i]/255;
+          const inner=outerRadius;
+          const outer=inner+10+amp*40;
+          const x1=cx+Math.cos(angle)*inner;
+          const y1=cy+Math.sin(angle)*inner;
+          const x2=cx+Math.cos(angle)*outer;
+          const y2=cy+Math.sin(angle)*outer;
+          ctx.beginPath();
+          ctx.moveTo(x1,y1); ctx.lineTo(x2,y2);
+          ctx.strokeStyle=`hsla(${200+amp*100},80%,60%,${0.2+amp*0.8})`;
+          ctx.lineWidth=2; ctx.stroke();
+        }
+      }
+
+      // 外层呼吸脉动光晕
+      const breathPhase = Math.sin(now/4);
+      const pulseScale = 1 + breathPhase*0.05;
+      const pulseAlpha = 0.3 + (breathPhase+1)/2 * 0.3;
+      ctx.beginPath();
+      ctx.arc(cx, cy, energyRadius * pulseScale, 0, 2*Math.PI);
+      const innerGlow = ctx.createRadialGradient(cx, cy, energyRadius*0.8, cx, cy, energyRadius*1.2);
+      innerGlow.addColorStop(0, `rgba(0,122,255,${0.2*pulseAlpha})`);
+      innerGlow.addColorStop(1, "rgba(0,122,255,0)");
+      ctx.fillStyle = innerGlow; ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx, cy, energyRadius * 1.3 * pulseScale, 0, 2*Math.PI);
+      const outerGlow = ctx.createRadialGradient(cx, cy, energyRadius, cx, cy, energyRadius*1.6);
+      outerGlow.addColorStop(0, `rgba(52,199,89,${0.15*pulseAlpha})`);
+      outerGlow.addColorStop(1, "rgba(52,199,89,0)");
+      ctx.fillStyle = outerGlow; ctx.fill();
+
+      // γ波闪点 + 屏幕闪烁
+      if(gammaActive){
+        if(Math.floor(now*42)%2===0){
+          ctx.beginPath();
+          ctx.arc(cx,cy,6,0,2*Math.PI);
+          ctx.fillStyle="rgba(255,45,85,0.9)";
+          ctx.fill();
+          flashOverlay.style.display="block";
+          flashOverlay.style.opacity=0.08;
+        }else{
+          flashOverlay.style.opacity=0;
+        }
+      }else{
+        flashOverlay.style.display="none";
+      }
+
+      // 呼吸文字
+      ctx.fillStyle=inhale?"#007aff":"#34c759";
+      ctx.font="bold 22px -apple-system";
+      ctx.textAlign="center"; ctx.textBaseline="middle";
+      ctx.fillText(inhale?"吸气":"呼气",cx,cy);
+
+      requestAnimationFrame(draw);
+    }
+    draw();
+
+    // === 分类按钮与曲库联动 ===
+    const infoValues=document.getElementById("info").querySelectorAll(".value");
+    const modeValue=document.getElementById("modeValue");
+    let categories=["θ波睡眠","α波专注","γ波防阿尔兹海默","减缓疼痛"];
+    let songLibrary=JSON.parse(localStorage.getItem("songLibrary")||"{}");
+    categories.forEach(c=>{ if(!songLibrary[c]) songLibrary[c]=[]; });
+
+    document.querySelectorAll(".modes .glass-btn").forEach(btn=>{
+      btn.addEventListener("click",()=>{
+        document.querySelectorAll(".modes .glass-btn").forEach(b=>b.classList.remove("active"));
+        btn.classList.add("active");
+        let cat=btn.textContent.trim();
+        modeValue.textContent=cat;
+        let list=songLibrary[cat]||[];
+        if(list.length===0){ alert("该分类暂无曲库内容，请在曲库管理中添加。"); return; }
+        let url=list[Math.floor(Math.random()*list.length)];
+        audioPlayer.src=url; audioPlayer.play();
+        infoValues[0].textContent=cat+" - "+url;
+      });
+    });
+
+    // === 管理员曲库管理 ===
+    const adminBtn=document.getElementById("adminBtn");
+    const adminPanel=document.getElementById("adminPanel");
+    const adminContent=document.getElementById("adminContent");
+    adminBtn.addEventListener("click",()=>{ openAdmin(); });
+    function openAdmin(){ adminPanel.style.display="flex"; renderAdmin(); }
+    function closeAdmin(){ adminPanel.style.display="none"; }
+    function renderAdmin(){
+      adminContent.innerHTML="";
+      categories.forEach(cat=>{
+        let box=document.createElement("div");
+        box.innerHTML=`<h4>${cat} (${(songLibrary[cat]||[]).length} 首)</h4>`;
+        let list=songLibrary[cat]||[];
+        let ul=document.createElement("ul");
+        list.forEach((url,idx)=>{
+          let li=document.createElement("li");
+          li.textContent=url;
+          let del=document.createElement("button");
+          del.textContent="❌";
+          del.onclick=()=>{ list.splice(idx,1); songLibrary[cat]=list; saveLibrary(); renderAdmin(); };
+          li.appendChild(del); ul.appendChild(li);
+        });
+        box.appendChild(ul);
+        let input=document.createElement("input"); input.placeholder="粘贴歌曲链接";
+        let btn=document.createElement("button"); btn.textContent="添加";
+        btn.onclick=()=>{ if(input.value){ list.push(input.value); songLibrary[cat]=list; saveLibrary(); renderAdmin(); } };
+        box.appendChild(input); box.appendChild(btn);
+        adminContent.appendChild(box);
+      });
+    }
+    function saveLibrary(){ localStorage.setItem("songLibrary",JSON.stringify(songLibrary)); }
+
+    // === 光疗按钮 ===
+    document.getElementById("gammaToggle").onclick=function(){ gammaActive=!gammaActive; this.classList.toggle("active"); };
+    document.getElementById("blueLightToggle").onclick=function(){
+      this.classList.toggle("active");
+      document.body.style.background=this.classList.contains("active") ?
+        "linear-gradient(135deg,#fff7e6,#ffe4cc)" : "linear-gradient(135deg,#eef2f7,#e3e7ef)";
+    };
+    document.getElementById("nirToggle").onclick=function(){
+      this.classList.toggle("active");
+      document.getElementById("redOverlay").style.display=this.classList.contains("active")?"block":"none";
+    };
+  </script>
+</body>
+</html>
